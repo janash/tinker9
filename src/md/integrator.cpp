@@ -68,10 +68,8 @@ void BasicIntegrator::printDetail(FILE* o)
    print(o, "\n");
    print(o, " %s\n", this->name());
 
-   MDIEngine::initialize(o);
-
-   MDIEngine::mdiprint("CALLING RUN_MDI\n");
-   MDIEngine::run_mdi();
+   MDIEngine::mdiprint("Calling run_mdi\n");
+   MDIEngine::run_mdi(MDIEngine::default_node_id);
 }
 
 void BasicIntegrator::dynamic(int istep, time_prec dt)

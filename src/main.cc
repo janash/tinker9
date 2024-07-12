@@ -8,7 +8,7 @@
 #include <map>
 
 #include <string>
-#include "mdi.h"
+#include "md/mdiengine.h"
 
 namespace tinker {
 static const char* main_name = "tinker9";
@@ -58,7 +58,7 @@ int main(int argc, char** argv)
    // Initialize MDI
    for (int i=0; i<argc; i++) {
       if ( strcmp(argv[i], "-mdi") == 0 ) {
-         MDI_Init(&argc, &argv);
+         MDIEngine::initialize(&argc, &argv);
          break;
       }
    }
