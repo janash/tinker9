@@ -598,7 +598,7 @@ add_subdirectory (test)
 
 ## executables
 add_library (__t9_main_o OBJECT src/main.cc)
-target_link_libraries (__t9_main_o PRIVATE __t9_intf tinkerFToCpp)
+target_link_libraries (__t9_main_o PRIVATE __t9_intf PRIVATE tinkerFToCpp)
 set_target_properties (__t9_main_o PROPERTIES CXX_STANDARD ${T9_CPPSTD})
 ## tinker9 and all.tests
 list (APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
@@ -669,6 +669,14 @@ add_custom_target (test
          ./all.tests -a --durations yes --order rand --rng-seed time ~[noassert] \;
       fi
 )
+
+
+## MDI support
+option(MDI "MDI build flag" OFF)
+if(MDI)
+  enable_language (C)
+  include(MDI)
+endif(MDI)
 
 
 ## documentations

@@ -9,6 +9,8 @@
 #include <tinker/detail/inform.hh>
 #include <tinker/detail/mdstuf.hh>
 #include <tinker/detail/units.hh>
+#include "mdi.h"
+#include "md/mdiengine.h"
 
 namespace tinker {
 void BasicIntegrator::plan(int istep)
@@ -65,11 +67,18 @@ void BasicIntegrator::printDetail(FILE* o)
    print(o, " NRespa             %12d\n", nrespa);
    print(o, "\n");
    print(o, " %s\n", this->name());
+
+   MDIEngine::initialize(o);
+
+   MDIEngine::mdiprint("CALLING RUN_MDI\n");
+   MDIEngine::run_mdi();
 }
 
 void BasicIntegrator::dynamic(int istep, time_prec dt)
 {
    time_prec dt2 = dt * 0.5;
+
+   MDIEngine::mdiprint("The integrator is on step: %d\n",istep);
 
    m_baro->control1(dt);
    m_thermo->control1(dt);

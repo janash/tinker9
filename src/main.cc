@@ -7,6 +7,9 @@
 #include <functional>
 #include <map>
 
+#include <string>
+#include "mdi.h"
+
 namespace tinker {
 static const char* main_name = "tinker9";
 static const char* analyze_name = "analyze";
@@ -51,6 +54,14 @@ static std::string getArg0(const char* a0)
 int main(int argc, char** argv)
 {
    using namespace tinker;
+
+   // Initialize MDI
+   for (int i=0; i<argc; i++) {
+      if ( strcmp(argv[i], "-mdi") == 0 ) {
+         MDI_Init(&argc, &argv);
+         break;
+      }
+   }
 
    std::string arg0;
    arg0 = getArg0(argv[0]);
