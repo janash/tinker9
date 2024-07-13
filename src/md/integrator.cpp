@@ -70,6 +70,7 @@ void BasicIntegrator::printDetail(FILE* o)
 
    MDIEngine::mdiprint("Calling run_mdi\n");
    MDIEngine::run_mdi(MDIEngine::default_node_id);
+   MDIEngine::run_mdi(MDIEngine::initmd_node_id);
 }
 
 void BasicIntegrator::dynamic(int istep, time_prec dt)
@@ -123,6 +124,9 @@ void BasicIntegrator::dynamic(int istep, time_prec dt)
       m_prop->rattle(dt);
       copyPosToXyz(true);
 
+      // MDI @COORDS node
+      MDIEngine::run_mdi(MDIEngine::coords_node_id);
+
       // fast force
       energy(vers1, RESPA_FAST, respaTSConfig());
       darray::copy(g::q0, n, gx1, gx);
@@ -170,6 +174,9 @@ void BasicIntegrator::dynamic(int istep, time_prec dt)
 
    m_thermo->control2(dt, save);
    m_baro->control2(dt);
+
+   // MDI @FORCES node
+   MDIEngine::run_mdi(MDIEngine::forces_node_id);
 }
 }
 

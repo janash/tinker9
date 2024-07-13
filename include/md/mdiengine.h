@@ -20,6 +20,7 @@ public:
    // node id's
    static int next_node_id;
    static int default_node_id;
+   static int initmd_node_id;
    static int forces_node_id;
    static int coords_node_id;
 
