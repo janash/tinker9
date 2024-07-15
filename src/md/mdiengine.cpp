@@ -76,6 +76,14 @@ void MDIEngine::run_mdi(int node_id)
    /* MDI command from the driver */
    char* command = new char[MDI_COMMAND_LENGTH];
 
+   /* Get conversion factors */
+   double kcal_to_hartree;
+   ret = MDI_Conversion_factor("kilocalorie_per_mol", "hartree", &kcal_to_hartree);
+   if ( ret ) {
+      TINKER_THROW(format("MDI  --  Error in MDI_Conversion_factor\n"));
+      exit_mdi = true;
+   }
+
    /* Main MDI loop */
    while (not terminate_node and not exit_mdi) {
       /* Receive a command from the driver */
@@ -98,21 +106,21 @@ void MDIEngine::run_mdi(int node_id)
             }
          }
          else if ( node_id == initmd_node_id ) {
-            MDI_Send("@INIT_MD", MDI_COMMAND_LENGTH, MDI_CHAR, mdi_comm);
+            ret = MDI_Send("@INIT_MD", MDI_COMMAND_LENGTH, MDI_CHAR, mdi_comm);
             if ( ret ) {
                TINKER_THROW(format("MDI  --  Error in MDI_Send\n"));
                exit_mdi = true;
             }
          }
          else if ( node_id == forces_node_id ) {
-            MDI_Send("@FORCES", MDI_COMMAND_LENGTH, MDI_CHAR, mdi_comm);
+            ret = MDI_Send("@FORCES", MDI_COMMAND_LENGTH, MDI_CHAR, mdi_comm);
             if ( ret ) {
                TINKER_THROW(format("MDI  --  Error in MDI_Send\n"));
                exit_mdi = true;
             }
          }
          else if ( node_id == coords_node_id ) {
-            MDI_Send("@COORDS", MDI_COMMAND_LENGTH, MDI_CHAR, mdi_comm);
+            ret = MDI_Send("@COORDS", MDI_COMMAND_LENGTH, MDI_CHAR, mdi_comm);
             if ( ret ) {
                TINKER_THROW(format("MDI  --  Error in MDI_Send\n"));
                exit_mdi = true;
@@ -133,7 +141,105 @@ void MDIEngine::run_mdi(int node_id)
       }
       else if ( strcmp(command, "@FORCES") == 0 ) {
          terminate_node = true;
-         target_node_id = coords_node_id;
+         target_node_id = forces_node_id;
+      }
+      else if ( strcmp(command, "<NATOMS") == 0 ) {
+         ret = MDI_Send(&n, 1, MDI_INT, mdi_comm);
+         if ( ret ) {
+            TINKER_THROW(format("MDI  --  Error in MDI_Send\n"));
+            exit_mdi = true;
+         }
+      }
+      else if ( strcmp(command, "<COORDS") == 0 ) {
+         double* coords = new double[3 * n];
+         double angstrom_to_bohr;
+         ret = MDI_Conversion_factor("angstrom", "bohr", &angstrom_to_bohr);
+         if ( ret ) {
+            TINKER_THROW(format("MDI  --  Error in MDI_Conversion_factor\n"));
+            exit_mdi = true;
+         }
+         for (int iatom = 0; iatom < n; iatom++) {
+            coords[(3 * iatom) + 0] = x[iatom] * angstrom_to_bohr;
+            coords[(3 * iatom) + 1] = y[iatom] * angstrom_to_bohr;
+            coords[(3 * iatom) + 2] = z[iatom] * angstrom_to_bohr;
+         }
+         ret = MDI_Send(coords, 3 * n, MDI_DOUBLE, mdi_comm);
+         if ( ret ) {
+            TINKER_THROW(format("MDI  --  Error in MDI_Send\n"));
+            exit_mdi = true;
+         }
+         delete [] coords;
+      }
+      else if ( strcmp(command, ">COORDS") == 0 ) {
+         double* coords = new double[3 * n];
+         double bohr_to_angstrom;
+         ret = MDI_Conversion_factor("bohr", "angstrom", &bohr_to_angstrom);
+         if ( ret ) {
+            TINKER_THROW(format("MDI  --  Error in MDI_Conversion_factor\n"));
+            exit_mdi = true;
+         }
+         ret = MDI_Recv(coords, 3 * n, MDI_DOUBLE, mdi_comm);
+         if ( ret ) {
+            TINKER_THROW(format("MDI  --  Error in MDI_Recv\n"));
+            exit_mdi = true;
+         }
+         for (int iatom = 0; iatom < n; iatom++) {
+            x[iatom] = coords[(3 * iatom) + 0] * bohr_to_angstrom;
+            y[iatom] = coords[(3 * iatom) + 1] * bohr_to_angstrom;
+            z[iatom] = coords[(3 * iatom) + 2] * bohr_to_angstrom;
+         }
+         delete [] coords;
+      }
+      else if ( strcmp(command, "<KE") == 0 ) {
+         double mdi_ke = eksum * kcal_to_hartree;
+         ret = MDI_Send(&mdi_ke, 1, MDI_DOUBLE, mdi_comm);
+         if ( ret ) {
+            TINKER_THROW(format("MDI  --  Error in MDI_Send\n"));
+            exit_mdi = true;
+         }
+      }
+      else if ( strcmp(command, "<PE") == 0 ) {
+         double mdi_e;
+         energy_prec tinker_e;
+         copyEnergy(calc::v0, &tinker_e);
+         mdi_e = tinker_e * kcal_to_hartree;
+         ret = MDI_Send(&mdi_e, 1, MDI_DOUBLE, mdi_comm);
+         if ( ret ) {
+            TINKER_THROW(format("MDI  --  Error in MDI_Send\n"));
+            exit_mdi = true;
+         }
+      }
+      else if ( strcmp(command, "<FORCES") == 0 ) {
+         double angstrom_to_bohr;
+         double* forces = new double[3 * n];
+         double* tinker_gx = new double[n];
+         double* tinker_gy = new double[n];
+         double* tinker_gz = new double[n];
+         ret = MDI_Conversion_factor("angstrom", "bohr", &angstrom_to_bohr);
+         if ( ret ) {
+            TINKER_THROW(format("MDI  --  Error in MDI_Conversion_factor\n"));
+            exit_mdi = true;
+         }
+         double conv_factor = - kcal_to_hartree / angstrom_to_bohr;
+         energy_prec tinker_e;
+         copyGradient(calc::v4, tinker_gx, tinker_gy, tinker_gz);
+         for (int iatom = 0; iatom < n; iatom++) {
+            forces[(3 * iatom) + 0] = tinker_gx[iatom] * conv_factor;
+            forces[(3 * iatom) + 1] = tinker_gy[iatom] * conv_factor;
+            forces[(3 * iatom) + 2] = tinker_gz[iatom] * conv_factor;
+         }
+         ret = MDI_Send(forces, 3 * n, MDI_DOUBLE, mdi_comm);
+         if ( ret ) {
+            TINKER_THROW(format("MDI  --  Error in MDI_Send\n"));
+            exit_mdi = true;
+         }
+      }
+      else if ( strcmp(command, "<MASSES") == 0 ) {
+         ret = MDI_Send(mass, n, MDI_DOUBLE, mdi_comm);
+         if ( ret ) {
+            TINKER_THROW(format("MDI  --  Error in MDI_Send\n"));
+            exit_mdi = true;
+         }
       }
       else if ( strcmp(command, "EXIT") == 0 ) {
          exit_mdi = true;
