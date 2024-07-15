@@ -95,6 +95,7 @@ void BasicIntegrator::dynamic(int istep, time_prec dt)
       m_prop->pos(dt);
       m_prop->rattle(dt);
       copyPosToXyz(true);
+      MDIEngine::run_mdi(MDIEngine::coords_node_id);
       energy(vers1);
       if (vers1 & calc::virial)
          if (not atomic)

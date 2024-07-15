@@ -83,6 +83,12 @@ void MDIEngine::run_mdi(int node_id)
       TINKER_THROW(format("MDI  --  Error in MDI_Conversion_factor\n"));
       exit_mdi = true;
    }
+   double angstrom_to_bohr;
+   ret = MDI_Conversion_factor("angstrom", "bohr", &angstrom_to_bohr);
+   if ( ret ) {
+      TINKER_THROW(format("MDI  --  Error in MDI_Conversion_factor\n"));
+      exit_mdi = true;
+   }
 
    /* Main MDI loop */
    while (not terminate_node and not exit_mdi) {
@@ -152,12 +158,6 @@ void MDIEngine::run_mdi(int node_id)
       }
       else if ( strcmp(command, "<COORDS") == 0 ) {
          double* coords = new double[3 * n];
-         double angstrom_to_bohr;
-         ret = MDI_Conversion_factor("angstrom", "bohr", &angstrom_to_bohr);
-         if ( ret ) {
-            TINKER_THROW(format("MDI  --  Error in MDI_Conversion_factor\n"));
-            exit_mdi = true;
-         }
          for (int iatom = 0; iatom < n; iatom++) {
             coords[(3 * iatom) + 0] = x[iatom] * angstrom_to_bohr;
             coords[(3 * iatom) + 1] = y[iatom] * angstrom_to_bohr;
@@ -209,21 +209,30 @@ void MDIEngine::run_mdi(int node_id)
             exit_mdi = true;
          }
       }
+      else if ( strcmp(command, "<ENERGY") == 0 ) {
+         double mdi_e;
+         energy_prec tinker_e;
+         copyEnergy(calc::v0, &tinker_e);
+         tinker_e += eksum;
+         mdi_e = tinker_e * kcal_to_hartree;
+         ret = MDI_Send(&mdi_e, 1, MDI_DOUBLE, mdi_comm);
+         if ( ret ) {
+            TINKER_THROW(format("MDI  --  Error in MDI_Send\n"));
+            exit_mdi = true;
+         }
+      }
       else if ( strcmp(command, "<FORCES") == 0 ) {
-         double angstrom_to_bohr;
          double* forces = new double[3 * n];
          double* tinker_gx = new double[n];
          double* tinker_gy = new double[n];
          double* tinker_gz = new double[n];
-         ret = MDI_Conversion_factor("angstrom", "bohr", &angstrom_to_bohr);
-         if ( ret ) {
-            TINKER_THROW(format("MDI  --  Error in MDI_Conversion_factor\n"));
-            exit_mdi = true;
-         }
          double conv_factor = - kcal_to_hartree / angstrom_to_bohr;
          energy_prec tinker_e;
          copyGradient(calc::v4, tinker_gx, tinker_gy, tinker_gz);
          for (int iatom = 0; iatom < n; iatom++) {
+            //forces[(3 * iatom) + 0] = (gx1[iatom] + gx2[iatom]) * conv_factor;
+            //forces[(3 * iatom) + 1] = (gy1[iatom] + gy2[iatom]) * conv_factor;
+            //forces[(3 * iatom) + 2] = (gz1[iatom] + gz2[iatom]) * conv_factor;
             forces[(3 * iatom) + 0] = tinker_gx[iatom] * conv_factor;
             forces[(3 * iatom) + 1] = tinker_gy[iatom] * conv_factor;
             forces[(3 * iatom) + 2] = tinker_gz[iatom] * conv_factor;
@@ -233,6 +242,35 @@ void MDIEngine::run_mdi(int node_id)
             TINKER_THROW(format("MDI  --  Error in MDI_Send\n"));
             exit_mdi = true;
          }
+      }
+      else if ( strcmp(command, ">FORCES") == 0 ) {
+         double* forces = new double[3 * n];
+         double* tinker_gx = new double[n];
+         double* tinker_gy = new double[n];
+         double* tinker_gz = new double[n];
+         double conv_factor = - angstrom_to_bohr / kcal_to_hartree;
+         energy_prec tinker_e;
+         ret = MDI_Recv(forces, 3 * n, MDI_DOUBLE, mdi_comm);
+         if ( ret ) {
+            TINKER_THROW(format("MDI  --  Error in MDI_Send\n"));
+            exit_mdi = true;
+         }
+         for (int iatom = 0; iatom < n; iatom++) {
+            gx[iatom] = forces[(3 * iatom) + 0] * conv_factor;
+            gy[iatom] = forces[(3 * iatom) + 1] * conv_factor;
+            gz[iatom] = forces[(3 * iatom) + 2] * conv_factor;
+
+            // fast RESPA forces
+            //gx1[iatom] = forces[(3 * iatom) + 0] * conv_factor;
+            //gy1[iatom] = forces[(3 * iatom) + 1] * conv_factor;
+            //gz1[iatom] = forces[(3 * iatom) + 2] * conv_factor;
+
+            // slow RESPA forces
+            //gx2[iatom] = 0.0;
+            //gy2[iatom] = 0.0;
+            //gz2[iatom] = 0.0;
+         }
+
       }
       else if ( strcmp(command, "<MASSES") == 0 ) {
          ret = MDI_Send(mass, n, MDI_DOUBLE, mdi_comm);
