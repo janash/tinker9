@@ -94,6 +94,12 @@ void MDIEngine::run_mdi(int node_id)
       TINKER_THROW(format("MDI  --  Error in MDI_Conversion_factor\n"));
       exit_mdi = true;
    }
+   double time_conv;
+   ret = MDI_Conversion_factor("picosecond", "atomic_unit_of_time", &time_conv);
+   if ( ret ) {
+      TINKER_THROW(format("MDI  --  Error in MDI_Conversion_factor\n"));
+      exit_mdi = true;
+   }
 
    /* Main MDI loop */
    while (not terminate_node and not exit_mdi) {
@@ -239,6 +245,9 @@ void MDIEngine::run_mdi(int node_id)
                forces[(3 * iatom) + 1] = tinker_gy[iatom] * conv_factor;
                forces[(3 * iatom) + 2] = tinker_gz[iatom] * conv_factor;
             }
+            delete [] tinker_gx;
+            delete [] tinker_gy;
+            delete [] tinker_gz;
          }
          else {
             for (int iatom = 0; iatom < n; iatom++) {
@@ -252,12 +261,10 @@ void MDIEngine::run_mdi(int node_id)
             TINKER_THROW(format("MDI  --  Error in MDI_Send\n"));
             exit_mdi = true;
          }
+         delete [] forces;
       }
       else if ( strcmp(command, ">FORCES") == 0 ) {
          double* forces = new double[3 * n];
-         double* tinker_gx = new double[n];
-         double* tinker_gy = new double[n];
-         double* tinker_gz = new double[n];
          double conv_factor = - angstrom_to_bohr / kcal_to_hartree;
          energy_prec tinker_e;
          ret = MDI_Recv(forces, 3 * n, MDI_DOUBLE, mdi_comm);
@@ -284,6 +291,7 @@ void MDIEngine::run_mdi(int node_id)
                gz2[iatom] = 0.0;
             }
          }
+         delete [] forces;
       }
       else if ( strcmp(command, "<MASSES") == 0 ) {
          ret = MDI_Send(mass, n, MDI_DOUBLE, mdi_comm);
@@ -291,6 +299,36 @@ void MDIEngine::run_mdi(int node_id)
             TINKER_THROW(format("MDI  --  Error in MDI_Send\n"));
             exit_mdi = true;
          }
+      }
+      else if ( strcmp(command, "<VELOCITIES") == 0 ) {
+         double* velocities = new double[3 * n];
+         double conv_factor = angstrom_to_bohr / time_conv;
+         for (int iatom = 0; iatom < n; iatom++) {
+            velocities[(3 * iatom) + 0] = vx[iatom] * conv_factor;
+            velocities[(3 * iatom) + 1] = vy[iatom] * conv_factor;
+            velocities[(3 * iatom) + 2] = vz[iatom] * conv_factor;
+         }
+         ret = MDI_Send(velocities, 3 * n, MDI_DOUBLE, mdi_comm);
+         if ( ret ) {
+            TINKER_THROW(format("MDI  --  Error in MDI_Send\n"));
+            exit_mdi = true;
+         }
+         delete [] velocities;
+      }
+      else if ( strcmp(command, ">VELOCITIES") == 0 ) {
+         double* velocities = new double[3 * n];
+         double conv_factor = time_conv / angstrom_to_bohr;
+         ret = MDI_Recv(velocities, 3 * n, MDI_DOUBLE, mdi_comm);
+         if ( ret ) {
+            TINKER_THROW(format("MDI  --  Error in MDI_Recv\n"));
+            exit_mdi = true;
+         }
+         for (int iatom = 0; iatom < n; iatom++) {
+            vx[iatom] = velocities[(3 * iatom) + 0] * conv_factor;
+            vy[iatom] = velocities[(3 * iatom) + 1] * conv_factor;
+            vz[iatom] = velocities[(3 * iatom) + 2] * conv_factor;
+         }
+         delete [] velocities;
       }
       else if ( strcmp(command, "EXIT") == 0 ) {
          exit_mdi = true;
