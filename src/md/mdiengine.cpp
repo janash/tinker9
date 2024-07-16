@@ -16,6 +16,7 @@
 namespace tinker {
 
 MDI_Comm MDIEngine::mdi_comm;
+int MDIEngine::nrespa_mdi;
 int MDIEngine::target_node_id;
 int MDIEngine::next_node_id;
 int MDIEngine::default_node_id;
@@ -25,7 +26,6 @@ int MDIEngine::coords_node_id;
 bool MDIEngine::terminate_node;
 bool MDIEngine::exit_mdi;
 
-//void MDIEngine::initialize(std::FILE* o)
 void MDIEngine::initialize(int* argc_ptr, char*** argv_ptr)
 {
    int ret;
@@ -53,6 +53,11 @@ void MDIEngine::initialize(int* argc_ptr, char*** argv_ptr)
    if ( ret ) {
       TINKER_THROW(format("MDI  --  Error in MDI_Accept_communicator\n"));
    }
+}
+
+void MDIEngine::set_nrespa(int nrespa_in)
+{
+   nrespa_mdi = nrespa_in;
 }
 
 void MDIEngine::run_mdi(int node_id)
@@ -223,19 +228,24 @@ void MDIEngine::run_mdi(int node_id)
       }
       else if ( strcmp(command, "<FORCES") == 0 ) {
          double* forces = new double[3 * n];
-         double* tinker_gx = new double[n];
-         double* tinker_gy = new double[n];
-         double* tinker_gz = new double[n];
          double conv_factor = - kcal_to_hartree / angstrom_to_bohr;
-         energy_prec tinker_e;
-         copyGradient(calc::v4, tinker_gx, tinker_gy, tinker_gz);
-         for (int iatom = 0; iatom < n; iatom++) {
-            //forces[(3 * iatom) + 0] = (gx1[iatom] + gx2[iatom]) * conv_factor;
-            //forces[(3 * iatom) + 1] = (gy1[iatom] + gy2[iatom]) * conv_factor;
-            //forces[(3 * iatom) + 2] = (gz1[iatom] + gz2[iatom]) * conv_factor;
-            forces[(3 * iatom) + 0] = tinker_gx[iatom] * conv_factor;
-            forces[(3 * iatom) + 1] = tinker_gy[iatom] * conv_factor;
-            forces[(3 * iatom) + 2] = tinker_gz[iatom] * conv_factor;
+         if ( nrespa_mdi == 1 ) {
+            double* tinker_gx = new double[n];
+            double* tinker_gy = new double[n];
+            double* tinker_gz = new double[n];
+            copyGradient(calc::v4, tinker_gx, tinker_gy, tinker_gz);
+            for (int iatom = 0; iatom < n; iatom++) {
+               forces[(3 * iatom) + 0] = tinker_gx[iatom] * conv_factor;
+               forces[(3 * iatom) + 1] = tinker_gy[iatom] * conv_factor;
+               forces[(3 * iatom) + 2] = tinker_gz[iatom] * conv_factor;
+            }
+         }
+         else {
+            for (int iatom = 0; iatom < n; iatom++) {
+               forces[(3 * iatom) + 0] = (gx1[iatom] + gx2[iatom]) * conv_factor;
+               forces[(3 * iatom) + 1] = (gy1[iatom] + gy2[iatom]) * conv_factor;
+               forces[(3 * iatom) + 2] = (gz1[iatom] + gz2[iatom]) * conv_factor;
+            }
          }
          ret = MDI_Send(forces, 3 * n, MDI_DOUBLE, mdi_comm);
          if ( ret ) {
@@ -259,18 +269,21 @@ void MDIEngine::run_mdi(int node_id)
             gx[iatom] = forces[(3 * iatom) + 0] * conv_factor;
             gy[iatom] = forces[(3 * iatom) + 1] * conv_factor;
             gz[iatom] = forces[(3 * iatom) + 2] * conv_factor;
-
-            // fast RESPA forces
-            //gx1[iatom] = forces[(3 * iatom) + 0] * conv_factor;
-            //gy1[iatom] = forces[(3 * iatom) + 1] * conv_factor;
-            //gz1[iatom] = forces[(3 * iatom) + 2] * conv_factor;
-
-            // slow RESPA forces
-            //gx2[iatom] = 0.0;
-            //gy2[iatom] = 0.0;
-            //gz2[iatom] = 0.0;
          }
+         // Only adjust the RESPA forces if using RESPA
+         if ( nrespa_mdi != 1 ) {
+            for (int iatom = 0; iatom < n; iatom++) {
+               // fast RESPA forces
+               gx1[iatom] = forces[(3 * iatom) + 0] * conv_factor;
+               gy1[iatom] = forces[(3 * iatom) + 1] * conv_factor;
+               gz1[iatom] = forces[(3 * iatom) + 2] * conv_factor;
 
+               // slow RESPA forces
+               gx2[iatom] = 0.0;
+               gy2[iatom] = 0.0;
+               gz2[iatom] = 0.0;
+            }
+         }
       }
       else if ( strcmp(command, "<MASSES") == 0 ) {
          ret = MDI_Send(mass, n, MDI_DOUBLE, mdi_comm);

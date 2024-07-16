@@ -69,6 +69,7 @@ void BasicIntegrator::printDetail(FILE* o)
    print(o, " %s\n", this->name());
 
    MDIEngine::mdiprint("Calling run_mdi\n");
+   MDIEngine::set_nrespa(nrespa);
    MDIEngine::run_mdi(MDIEngine::default_node_id);
    MDIEngine::run_mdi(MDIEngine::initmd_node_id);
 }

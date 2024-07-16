@@ -13,8 +13,10 @@ class MDIEngine
 protected:
    // MDI communicator with the driver
    static MDI_Comm mdi_comm;
+   static int nrespa_mdi;
 public:
    static void initialize(int* argc_ptr, char*** argv_ptr);
+   static void set_nrespa(int nrespa);
    static void run_mdi(int node_id);
 
    // node id's
