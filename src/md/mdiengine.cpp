@@ -282,14 +282,12 @@ void MDIEngine::run_mdi(int node_id)
          }
          std::vector<grad_prec> gx_mdi(n), gy_mdi(n), gz_mdi(n);
 #if TINKER_DETERMINISTIC_FORCE
-         mdiprint("   DETERMINISTIC FORCE: %d\n",n);
          for (int iatom = 0; iatom < n; iatom++) {
             gx_mdi[iatom] = toFixedPoint<double>( forces[(3 * iatom) + 0] * conv_factor );
             gy_mdi[iatom] = toFixedPoint<double>( forces[(3 * iatom) + 1] * conv_factor );
             gz_mdi[iatom] = toFixedPoint<double>( forces[(3 * iatom) + 2] * conv_factor );
          }
 #else
-         mdiprint("   NOT DETERMINISTIC FORCE: %d\n",n);
          for (int iatom = 0; iatom < n; iatom++) {
             gx_mdi[iatom] = forces[(3 * iatom) + 0] * conv_factor;
             gy_mdi[iatom] = forces[(3 * iatom) + 1] * conv_factor;
@@ -324,12 +322,18 @@ void MDIEngine::run_mdi(int node_id)
          }
       }
       else if ( strcmp(command, "<VELOCITIES") == 0 ) {
+         std::vector<vel_prec> vvx(n), vvy(n), vvz(n);
+         darray::copyout(g::q0, n, vvx.data(), vx);
+         darray::copyout(g::q0, n, vvy.data(), vy);
+         darray::copyout(g::q0, n, vvz.data(), vz);
+         waitFor(g::q0);
+
          double* velocities = new double[3 * n];
          double conv_factor = angstrom_to_bohr / time_conv;
          for (int iatom = 0; iatom < n; iatom++) {
-            velocities[(3 * iatom) + 0] = vx[iatom] * conv_factor;
-            velocities[(3 * iatom) + 1] = vy[iatom] * conv_factor;
-            velocities[(3 * iatom) + 2] = vz[iatom] * conv_factor;
+            velocities[(3 * iatom) + 0] = vvx[iatom] * conv_factor;
+            velocities[(3 * iatom) + 1] = vvy[iatom] * conv_factor;
+            velocities[(3 * iatom) + 2] = vvz[iatom] * conv_factor;
          }
          ret = MDI_Send(velocities, 3 * n, MDI_DOUBLE, mdi_comm);
          if ( ret ) {
@@ -346,11 +350,18 @@ void MDIEngine::run_mdi(int node_id)
             TINKER_THROW(format("MDI  --  Error in MDI_Recv\n"));
             exit_mdi = true;
          }
-         for (int iatom = 0; iatom < n; iatom++) {
-            vx[iatom] = velocities[(3 * iatom) + 0] * conv_factor;
-            vy[iatom] = velocities[(3 * iatom) + 1] * conv_factor;
-            vz[iatom] = velocities[(3 * iatom) + 2] * conv_factor;
+
+         std::vector<vel_prec> vvx(n), vvy(n), vvz(n);
+         for (int iatom = 0; iatom < n; ++iatom) {
+            vvx[iatom] = velocities[(3 * iatom) + 0] * conv_factor;
+            vvy[iatom] = velocities[(3 * iatom) + 1] * conv_factor;
+            vvz[iatom] = velocities[(3 * iatom) + 2] * conv_factor;
          }
+         darray::copyin(g::q0, n, vx, vvx.data());
+         darray::copyin(g::q0, n, vy, vvy.data());
+         darray::copyin(g::q0, n, vz, vvz.data());
+         waitFor(g::q0);
+
          delete [] velocities;
       }
       else if ( strcmp(command, "EXIT") == 0 ) {
