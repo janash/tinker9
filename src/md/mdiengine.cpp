@@ -26,6 +26,14 @@ int MDIEngine::coords_node_id;
 bool MDIEngine::terminate_node;
 bool MDIEngine::exit_mdi;
 
+/// Converts a floating-point value \c f to fixed-point value on host.
+template <class F>
+inline fixed MDIEngine::toFixedPoint(F f)
+{
+    static_assert(std::is_same<F, float>::value or std::is_same<F, double>::value, "");
+    return static_cast<fixed>(static_cast<long long>(f * 0x100000000ull));
+}
+
 void MDIEngine::initialize(int* argc_ptr, char*** argv_ptr)
 {
    int ret;
@@ -272,11 +280,26 @@ void MDIEngine::run_mdi(int node_id)
             TINKER_THROW(format("MDI  --  Error in MDI_Send\n"));
             exit_mdi = true;
          }
+         std::vector<grad_prec> gx_mdi(n), gy_mdi(n), gz_mdi(n);
+#if TINKER_DETERMINISTIC_FORCE
+         mdiprint("   DETERMINISTIC FORCE: %d\n",n);
          for (int iatom = 0; iatom < n; iatom++) {
-            gx[iatom] = forces[(3 * iatom) + 0] * conv_factor;
-            gy[iatom] = forces[(3 * iatom) + 1] * conv_factor;
-            gz[iatom] = forces[(3 * iatom) + 2] * conv_factor;
+            gx_mdi[iatom] = toFixedPoint<double>( forces[(3 * iatom) + 0] * conv_factor );
+            gy_mdi[iatom] = toFixedPoint<double>( forces[(3 * iatom) + 1] * conv_factor );
+            gz_mdi[iatom] = toFixedPoint<double>( forces[(3 * iatom) + 2] * conv_factor );
          }
+#else
+         mdiprint("   NOT DETERMINISTIC FORCE: %d\n",n);
+         for (int iatom = 0; iatom < n; iatom++) {
+            gx_mdi[iatom] = forces[(3 * iatom) + 0] * conv_factor;
+            gy_mdi[iatom] = forces[(3 * iatom) + 1] * conv_factor;
+            gz_mdi[iatom] = forces[(3 * iatom) + 2] * conv_factor;
+         }
+#endif
+         darray::copyin(g::q0, n, gx, gx_mdi.data());
+         darray::copyin(g::q0, n, gy, gy_mdi.data());
+         darray::copyin(g::q0, n, gz, gz_mdi.data());
+         waitFor(g::q0);
          // Only adjust the RESPA forces if using RESPA
          if ( nrespa_mdi != 1 ) {
             for (int iatom = 0; iatom < n; iatom++) {

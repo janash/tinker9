@@ -1,6 +1,7 @@
 #pragma once
 #include "tool/error.h"
 #include "tool/ioprint.h"
+#include "ff/precision.h"
 #include <tinker/detail/inform.hh>
 #include <tinker/detail/mdstuf.hh>
 #include <tinker/detail/units.hh>
@@ -40,6 +41,10 @@ public:
    static void mdiprint(const F& f, Ts&&... args){
        print(stdout, f, args...);
    };
+
+   // converts a fixed-point value \c g to floating-point value on host.
+   template <class F>
+   static inline fixed toFixedPoint(F f);
 };
 
 }
