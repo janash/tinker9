@@ -7,6 +7,7 @@
 #include "md/rattle.h"
 #include "tool/error.h"
 #include "tool/ioprint.h"
+#include <tinker/detail/atoms.hh>
 #include <tinker/detail/inform.hh>
 #include <tinker/detail/mdstuf.hh>
 #include <tinker/detail/units.hh>
@@ -177,10 +178,14 @@ void MDIEngine::run_mdi(int node_id)
       }
       else if ( strcmp(command, "<COORDS") == 0 ) {
          double* coords = new double[3 * n];
+         darray::copyout(g::q0, n, atoms::x, xpos);
+         darray::copyout(g::q0, n, atoms::y, ypos);
+         darray::copyout(g::q0, n, atoms::z, zpos);
+         waitFor(g::q0);
          for (int iatom = 0; iatom < n; iatom++) {
-            coords[(3 * iatom) + 0] = x[iatom] * angstrom_to_bohr;
-            coords[(3 * iatom) + 1] = y[iatom] * angstrom_to_bohr;
-            coords[(3 * iatom) + 2] = z[iatom] * angstrom_to_bohr;
+            coords[(3 * iatom) + 0] = atoms::x[iatom] * angstrom_to_bohr;
+            coords[(3 * iatom) + 1] = atoms::y[iatom] * angstrom_to_bohr;
+            coords[(3 * iatom) + 2] = atoms::z[iatom] * angstrom_to_bohr;
          }
          ret = MDI_Send(coords, 3 * n, MDI_DOUBLE, mdi_comm);
          if ( ret ) {
@@ -191,22 +196,29 @@ void MDIEngine::run_mdi(int node_id)
       }
       else if ( strcmp(command, ">COORDS") == 0 ) {
          double* coords = new double[3 * n];
-         double bohr_to_angstrom;
-         ret = MDI_Conversion_factor("bohr", "angstrom", &bohr_to_angstrom);
-         if ( ret ) {
-            TINKER_THROW(format("MDI  --  Error in MDI_Conversion_factor\n"));
-            exit_mdi = true;
-         }
+         double conv_factor = 1.0 / angstrom_to_bohr;
          ret = MDI_Recv(coords, 3 * n, MDI_DOUBLE, mdi_comm);
          if ( ret ) {
             TINKER_THROW(format("MDI  --  Error in MDI_Recv\n"));
             exit_mdi = true;
-         }
+         }/*
          for (int iatom = 0; iatom < n; iatom++) {
             x[iatom] = coords[(3 * iatom) + 0] * bohr_to_angstrom;
             y[iatom] = coords[(3 * iatom) + 1] * bohr_to_angstrom;
             z[iatom] = coords[(3 * iatom) + 2] * bohr_to_angstrom;
+         }*/
+
+         std::vector<pos_prec> x_mdi(n), y_mdi(n), z_mdi(n);
+         for (int iatom = 0; iatom < n; ++iatom) {
+            x_mdi[iatom] = coords[(3 * iatom) + 0] * conv_factor;
+            y_mdi[iatom] = coords[(3 * iatom) + 1] * conv_factor;
+            z_mdi[iatom] = coords[(3 * iatom) + 2] * conv_factor;
          }
+         darray::copyin(g::q0, n, xpos, x_mdi.data());
+         darray::copyin(g::q0, n, ypos, y_mdi.data());
+         darray::copyin(g::q0, n, zpos, z_mdi.data());
+         waitFor(g::q0);
+
          delete [] coords;
       }
       else if ( strcmp(command, "<KE") == 0 ) {
