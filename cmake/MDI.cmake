@@ -13,7 +13,7 @@ ExternalProject_Add(mdi_build
   -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
   -Dlanguage=C
   -Dlibtype=STATIC
-  -Dmpi=OFF
+  -Dmpi=ON
   -Dplugins=ON
   -Dpython_plugins=OFF
   UPDATE_COMMAND ""
